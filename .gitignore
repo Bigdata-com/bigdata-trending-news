@@ -1,0 +1,33 @@
+# Python / environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+uv.lock
+**/uv.lock
+
+# Secrets: never commit real keys (.env.example holds the variable names only)
+.env
+.env.*
+!.env.example
+
+# Generated reports: keep only the committed samples.
+# This also covers scheduled runs (outputs/runs/, outputs/latest/) and outputs/scheduler.log.
+outputs/*
+!outputs/samples/
+
+# Temporary files from building the README images
+docs/_tmp/
+
+# Editors / OS / local tooling
+.DS_Store
+.vscode/
+.idea/
+.claude/
+*.swp
+*.log

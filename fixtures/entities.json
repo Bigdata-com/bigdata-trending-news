@@ -1,0 +1,172 @@
+{
+ "commodity:Copper": {
+  "category": "concepts",
+  "id": "A4090F",
+  "input": "copper",
+  "key": "Copper",
+  "kind": "commodity",
+  "mode": "entity",
+  "name": "Copper",
+  "note": "KG concepts (Commodity)",
+  "texts": [
+   "copper price LME COMEX",
+   "copper supply demand China"
+  ],
+  "type": "Commodity"
+ },
+ "commodity:Crude Oil": {
+  "category": "concepts",
+  "id": "FD9CFE",
+  "input": "crude oil",
+  "key": "Crude Oil",
+  "kind": "commodity",
+  "mode": "entity",
+  "name": "Crude Oil",
+  "note": "KG concepts (Commodity)",
+  "texts": [
+   "oil price Brent WTI",
+   "OPEC output"
+  ],
+  "type": "Commodity"
+ },
+ "commodity:Gold": {
+  "category": "concepts",
+  "id": "9768FE",
+  "input": "gold",
+  "key": "Gold",
+  "kind": "commodity",
+  "mode": "entity",
+  "name": "Gold",
+  "note": "KG concepts (Commodity)",
+  "texts": [
+   "gold price rises",
+   "gold price falls",
+   "gold rally bullion demand"
+  ],
+  "type": "Commodity"
+ },
+ "commodity:Silver": {
+  "category": "concepts",
+  "id": "F96E34",
+  "input": "silver",
+  "key": "Silver",
+  "kind": "commodity",
+  "mode": "entity",
+  "name": "Silver",
+  "note": "KG concepts (Commodity)",
+  "texts": [
+   "silver price rises",
+   "silver price falls",
+   "silver industrial demand"
+  ],
+  "type": "Commodity"
+ },
+ "free_text:Federal Reserve": {
+  "category": "organizations",
+  "id": "F38FC4",
+  "input": "Federal Reserve",
+  "key": "Federal Reserve",
+  "kind": "free_text",
+  "mode": "entity",
+  "name": "United States Federal Reserve",
+  "note": "KG organizations: best name match with most news",
+  "texts": [],
+  "type": "Central Bank"
+ },
+ "free_text:OpenAI": {
+  "category": "companies",
+  "id": "UWCVKI",
+  "input": "OpenAI",
+  "key": "OpenAI",
+  "kind": "free_text",
+  "mode": "entity",
+  "name": "OpenAI Foundation",
+  "note": "KG companies: best name match with most news",
+  "texts": [],
+  "type": "PRIVATE"
+ },
+ "ticker:AAPL": {
+  "category": "companies",
+  "id": "D8442A",
+  "input": "AAPL",
+  "key": "AAPL",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Apple Inc.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:AMZN": {
+  "category": "companies",
+  "id": "0157B1",
+  "input": "AMZN",
+  "key": "AMZN",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Amazon.com Inc.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:GOOGL": {
+  "category": "companies",
+  "id": "4A6F00",
+  "input": "GOOGL",
+  "key": "GOOGL",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Alphabet Inc.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:META": {
+  "category": "companies",
+  "id": "12E454",
+  "input": "META",
+  "key": "META",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Meta Platforms Inc.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:MSFT": {
+  "category": "companies",
+  "id": "228D42",
+  "input": "MSFT",
+  "key": "MSFT",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Microsoft Corp.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:NVDA": {
+  "category": "companies",
+  "id": "E09E2B",
+  "input": "NVDA",
+  "key": "NVDA",
+  "kind": "company",
+  "mode": "entity",
+  "name": "NVIDIA Corp.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ },
+ "ticker:TSLA": {
+  "category": "companies",
+  "id": "DD3BB1",
+  "input": "TSLA",
+  "key": "TSLA",
+  "kind": "company",
+  "mode": "entity",
+  "name": "Tesla Inc.",
+  "note": "KG ticker match (matches verified default)",
+  "texts": [],
+  "type": "PUBLIC"
+ }
+}
