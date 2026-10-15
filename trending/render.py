@@ -14,8 +14,6 @@ import html as _html
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
-
 import pandas as pd
 
 from . import config as cfg
@@ -295,7 +293,7 @@ def _header(title: str, scope: str, ctx: ReportContext, llm_label: str) -> str:
 
 def _footer() -> str:
     return ('<div class="foot">Data: <a href="https://bigdata.com" target="_blank" rel="noopener">Bigdata.com</a> '
-            "(/v1/search, /v1/search/volume, /v1/search/co-mentions/entities, Knowledge Graph). "
+            "(/v1/search, /v1/search/volume, Knowledge Graph). "
             "Article counts come from search results, which de-duplicate similar passages, so they understate "
             "total coverage; entity momentum (×) comes from the volume endpoint. Times are UTC.</div>")
 
@@ -306,7 +304,7 @@ def _wrap(title: str, body: str) -> str:
 
 def watchlist_report(
     *, title: str, scope: str, ctx: ReportContext, trending: list[Story], emerging: list[Story],
-    llm_label: str, discovery: dict[str, Any] | None = None,
+    llm_label: str,
 ) -> str:
     parts = [_header(title, scope, ctx, llm_label)]
     parts.append('<h2>Momentum <span class="sub">which names are unusually loud right now (× = coverage vs normal)</span></h2>')
@@ -317,13 +315,6 @@ def watchlist_report(
                  '<span class="sub">early signals from credible outlets, not (yet) widely covered</span></h2>')
     parts.append(_list([emerging_row(s, i, ctx) for i, s in enumerate(emerging, 1)],
                        "No stories met the Emerging thresholds in this window.") + "</div>")
-    if discovery:
-        dctx: ReportContext = discovery["ctx"]
-        parts.append('<div class="group"><h2>Also trending beyond your watchlist '
-                     '<span class="sub">companies with the sharpest jump in co-mentions in the news</span></h2>')
-        parts.append(momentum_strip(dctx))
-        parts.append(_list([story_row(s, i, dctx) for i, s in enumerate(discovery["trending"], 1)],
-                           "No multi-source stories found.") + "</div>")
     parts.append(_footer())
     return _wrap(title, "".join(parts))
 
@@ -362,11 +353,37 @@ def commodities_report(
 # --------------------------------------------------------------------------- #
 # DataFrames, CSV, files
 # --------------------------------------------------------------------------- #
+_STORY_COLUMNS: tuple[str, ...] = (
+    "rank",
+    "story_id",
+    "title",
+    "entities",
+    "articles",
+    "sources",
+    "direction",
+    "driver",
+    "materiality",
+    "spike",
+    "trend_score",
+    "avg_sentiment",
+    "sentiment_signal",
+    "first_seen_utc",
+    "last_seen_utc",
+    "summary",
+    "representative_headline",
+    "representative_source",
+    "representative_url",
+    "source_names",
+)
+_EMERGING_COLUMNS: tuple[str, ...] = ("emerging_score", "best_source_rank")
+
+
 def stories_frame(stories: list[Story], kind: str = "trending") -> pd.DataFrame:
-    rows = []
+    """One row per story. An empty list still returns the column schema."""
+    rows: list[dict[str, object]] = []
     for i, s in enumerate(stories, 1):
         rep = s.representative
-        row = {
+        row: dict[str, object] = {
             "rank": i,
             "story_id": s.sid,
             "title": s.title or rep.headline,
@@ -392,7 +409,10 @@ def stories_frame(stories: list[Story], kind: str = "trending") -> pd.DataFrame:
             row["emerging_score"] = s.emerging
             row["best_source_rank"] = s.best_source_rank
         rows.append(row)
-    return pd.DataFrame(rows)
+    columns: list[str] = list(_STORY_COLUMNS)
+    if kind == "emerging":
+        columns.extend(_EMERGING_COLUMNS)
+    return pd.DataFrame(rows, columns=columns)
 
 
 def full_document(fragment: str, title: str) -> str:

@@ -10,7 +10,7 @@ Rules
   the news actually talks about.
 * A name that cannot be resolved is either skipped (watchlist) or run in
   keyword mode (commodities: search by text, no entity filter).
-* Results are cached in fixtures/entities.json; print the table and sanity-check it.
+* Results are cached locally in fixtures/entities.json; print the table and sanity-check it.
 """
 from __future__ import annotations
 
@@ -195,7 +195,7 @@ def resolve_all(
     verbose: bool = True,
 ) -> list[Entity]:
     """
-    Resolve everything, using fixtures/entities.json as a cache.
+    Resolve everything, using the local fixtures/entities.json cache.
     Set refresh=True to re-query the Knowledge Graph.
     """
     as_of = as_of or datetime.now().astimezone()
@@ -203,7 +203,7 @@ def resolve_all(
     out: list[Entity] = []
 
     def cached(k: str) -> Entity | None:
-        if refresh and not cfg.REPLAY:
+        if refresh:
             return None
         d = table.get(k)
         return Entity(**d) if d else None
@@ -229,8 +229,7 @@ def resolve_all(
         table[k] = ent.to_dict()
         out.append(ent)
 
-    if not cfg.REPLAY:
-        cache.save_entities(table)
+    cache.save_entities(table)
 
     for e in out:
         if e.mode == "unresolved":

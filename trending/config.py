@@ -34,8 +34,6 @@ BIGDATA_API_KEY = os.getenv("BIGDATA_API_KEY", "")
 # --------------------------------------------------------------------------- #
 # Run mode
 # --------------------------------------------------------------------------- #
-# REPLAY=True runs entirely from fixtures/ (no network, no API keys needed).
-REPLAY: bool = os.getenv("REPLAY", "").lower() in {"1", "true", "yes"}
 USE_LLM: bool = True
 # Fix the run's reference time (UTC ISO string, e.g. "2026-10-13T18:40:00Z").
 # None = now. Useful to reproduce a run or look back at a past day.
@@ -78,11 +76,8 @@ FETCH_SLICES = 1
 # --------------------------------------------------------------------------- #
 # LLM
 # --------------------------------------------------------------------------- #
-# Provider is picked from LLM_PROVIDER, else from whichever key is present
-# (Anthropic first). Model comes from LLM_MODEL, else the provider default.
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "")
-DEFAULT_MODELS = {"anthropic": "claude-sonnet-5-5", "openai": "gpt-4.1"}
+# OpenAI model. Override with LLM_MODEL; the notebooks set gpt-5.6.
+LLM_MODEL = os.getenv("LLM_MODEL", "gpt-5.6")
 LLM_CONCURRENCY = 8
 CLUSTER_BATCH_SIZE = 120     # articles per clustering call
 GATE_BATCH_SIZE = 100        # articles per relevance-gate call
@@ -158,27 +153,6 @@ COMMODITY_KG_TYPES = ["Commodity"]
 
 # Relevance gate (Notebook 2): which article classes to keep.
 GATE_KEEP = ["market_move"]
-
-# --------------------------------------------------------------------------- #
-# Discovery ("also trending beyond your watchlist", Notebook 1, optional)
-# --------------------------------------------------------------------------- #
-# Co-mentions returns a limited set of entities per query, so several phrasings
-# are combined (each call costs ~1 query unit).
-DISCOVERY_QUERY_TEXTS = [
-    "shares rose or fell after company announcement",
-    "company news",
-    "stock market news",
-    "earnings results and guidance",
-    "merger, acquisition or deal announced",
-]
-DISCOVERY_TOP_N = 10
-DISCOVERY_MIN_CURRENT = 5    # ignore companies with fewer current headlines
-DISCOVERY_DENYLIST = {
-    "Stock", "U.S. Dollar", "Earnings", "Business", "United States of America",
-    "Nasdaq Inc.", "New York Stock Exchange", "S&P Global Inc.", "Dow Jones & Co. Inc.",
-    "Reuters", "Bloomberg L.P.", "Benzinga", "Zacks Investment Research Inc.",
-    "Motley Fool", "Yahoo Inc.", "MarketWatch", "Seeking Alpha", "Cable News Network Inc.",
-}
 
 
 def window() -> dict:

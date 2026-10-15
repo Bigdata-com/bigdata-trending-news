@@ -16,6 +16,9 @@ uv.lock
 .env.*
 !.env.example
 
+# Local API and LLM response cache. Never commit.
+fixtures/
+
 # Generated reports: keep only the committed samples.
 # This also covers scheduled runs (outputs/runs/, outputs/latest/) and outputs/scheduler.log.
 outputs/*

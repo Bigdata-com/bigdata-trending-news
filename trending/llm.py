@@ -1,20 +1,12 @@
 """
-Thin, provider-agnostic LLM wrapper with JSON helpers and a prompt cache.
+OpenAI wrapper with JSON helpers and a prompt cache.
 
-    llm = get_llm()                 # None when USE_LLM=False or no key/fixture
+    llm = get_llm()                 # None when USE_LLM=False or no API key
     data = llm.json(system, user)   # -> dict (or None if the model failed)
 
-Providers
-* "anthropic" (default) - Claude via the Anthropic SDK. Model from LLM_MODEL,
-  default claude-sonnet-5-5. Current Claude models do not accept a sampling
-  temperature, so determinism comes from low effort + strict JSON instructions
-  + the prompt cache below.
-* "openai" - via the OpenAI SDK, temperature 0 and JSON mode.
-
-To add another provider, implement `_call_<name>(system, user, max_tokens) -> str`.
-
+Calls go to OpenAI (default model gpt-5.6) with temperature 0 and JSON mode.
 Every response is cached under fixtures/<namespace>/llm/ keyed by a hash of the
-prompt, so re-runs are instant and free, and REPLAY works with no API key.
+prompt, so a repeated prompt is not sent to the model again.
 """
 from __future__ import annotations
 
@@ -51,9 +43,6 @@ class LLM:
         if hit is not None:
             self.cache_hits += 1
             return hit
-        if cfg.REPLAY:
-            log.warning("REPLAY: no LLM fixture for this prompt; falling back")
-            return None
         for attempt in range(2):
             try:
                 t0 = time.time()
@@ -70,26 +59,6 @@ class LLM:
         return None
 
     # ------------------------------------------------------------------ #
-    def _call_anthropic(self, system: str, user: str, max_tokens: int) -> str:
-        import anthropic
-
-        if self._client is None:
-            self._client = anthropic.Anthropic(max_retries=3)
-        resp = self._client.beta.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            system=system,
-            output_config={"effort": "low"},
-            # If a request is declined by a safety classifier, retry on a
-            # fallback model inside the same call.
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            messages=[{"role": "user", "content": user}],
-        )
-        if resp.stop_reason == "refusal":
-            raise RuntimeError("model declined the request")
-        return "".join(b.text for b in resp.content if b.type == "text")
-
     def _call_openai(self, system: str, user: str, max_tokens: int) -> str:
         import openai
 
@@ -124,26 +93,10 @@ def parse_json(text: str) -> dict[str, Any] | None:
 
 
 def get_llm() -> LLM | None:
-    """
-    The configured LLM, or None (=> lexical / heuristic fallbacks are used).
-
-    Provider: LLM_PROVIDER env/config, else Anthropic if ANTHROPIC_API_KEY is
-    set, else OpenAI if OPENAI_API_KEY is set. In REPLAY mode no key is needed:
-    answers come from the saved fixtures.
-    """
+    """The configured OpenAI model, or None when the AI model is off or no key is set."""
     if not cfg.USE_LLM:
         return None
-    provider = (cfg.LLM_PROVIDER or "").lower()
-    if not provider:
-        if os.getenv("ANTHROPIC_API_KEY"):
-            provider = "anthropic"
-        elif os.getenv("OPENAI_API_KEY"):
-            provider = "openai"
-        elif cfg.REPLAY:
-            provider = "anthropic"  # replay serves cached answers; provider unused
-        else:
-            print("No LLM key found (ANTHROPIC_API_KEY / OPENAI_API_KEY) → using lexical fallbacks.")
-            return None
-    if provider not in cfg.DEFAULT_MODELS:
-        raise ValueError(f"Unknown LLM_PROVIDER {provider!r}; use one of {list(cfg.DEFAULT_MODELS)}")
-    return LLM(provider, cfg.LLM_MODEL or cfg.DEFAULT_MODELS[provider])
+    if not os.getenv("OPENAI_API_KEY"):
+        print("No LLM key found (OPENAI_API_KEY) → using lexical fallbacks.")
+        return None
+    return LLM("openai", cfg.LLM_MODEL or "gpt-5.6")

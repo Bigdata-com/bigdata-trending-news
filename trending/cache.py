@@ -1,21 +1,18 @@
 """
-Disk cache for API and LLM responses, which doubles as the offline fixtures.
+Local disk cache for API and LLM responses. Not committed; see .gitignore.
 
 Layout (one folder per demo, so the two notebooks never clash):
 
     fixtures/
       entities.json              # resolved entity IDs (shared)
       <namespace>/
-        run.json                 # the "as of" timestamp of the saved run
         api/<sha>.json.gz        # Bigdata.com responses (gzipped JSON)
         llm/<sha>.json.gz        # LLM responses (gzipped JSON)
 
-Live mode: API entries are reused for CACHE_TTL_SECONDS; LLM entries are reused
-forever (same prompt -> same answer, which keeps re-runs fast and cheap).
-Replay mode: everything is served from disk, regardless of age; no network.
+API entries are reused for CACHE_TTL_SECONDS. LLM entries are reused until
+the cache is cleared (same prompt -> same answer, which keeps re-runs cheap).
 
-`finalize()` deletes files the current run did not use, so the committed
-fixtures stay small and always match the last live run exactly.
+`finalize()` deletes files the current run did not use.
 """
 from __future__ import annotations
 
@@ -34,7 +31,7 @@ _touched: set[Path] = set()
 
 
 def set_namespace(name: str) -> None:
-    """Select the fixtures folder for this demo (e.g. 'watchlist')."""
+    """Select the cache folder for this demo (e.g. 'watchlist')."""
     global _namespace
     _namespace = name
     _touched.clear()
@@ -59,7 +56,7 @@ def get(kind: str, key: str, ttl: float | None) -> Any | None:
         return None
     with gzip.open(path, "rt", encoding="utf-8") as fh:
         entry = json.load(fh)
-    if not cfg.REPLAY and ttl is not None and time.time() - entry["saved_at"] > ttl:
+    if ttl is not None and time.time() - entry["saved_at"] > ttl:
         return None
     _touched.add(path)
     return entry["value"]
@@ -77,52 +74,21 @@ def run_clock(round_minutes: int = 10) -> datetime:
     """
     The reference "now" for this run.
 
-    Live: config.AS_OF if set, else the current UTC time rounded down to
+    config.AS_OF if set, else the current UTC time rounded down to
     `round_minutes`, so re-runs within the cache TTL build identical requests
     and hit the cache.
-    Replay: the timestamp of the saved run, so requests match the fixtures.
     """
-    run_file = _run_file()
-    if cfg.REPLAY:
-        if not run_file.exists():
-            raise FileNotFoundError(
-                f"REPLAY=True but no fixtures found at {run_file.parent}. "
-                "Run the notebook once live (REPLAY=False) to record them."
-            )
-        return datetime.fromisoformat(json.loads(run_file.read_text())["as_of"])
     if cfg.AS_OF:
-        now = datetime.fromisoformat(cfg.AS_OF.replace("Z", "+00:00")).astimezone(timezone.utc)
-    else:
-        now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-        now -= timedelta(minutes=now.minute % round_minutes)
-    run_file.parent.mkdir(parents=True, exist_ok=True)
-    run_file.write_text(json.dumps({"as_of": now.isoformat()}, indent=1))
-    return now
-
-
-def _run_file() -> Path:
-    return cfg.FIXTURES_DIR / _namespace / "run.json"
-
-
-def run_meta() -> dict[str, Any]:
-    """Metadata of the saved run (as_of, LLM model used, ...)."""
-    f = _run_file()
-    return json.loads(f.read_text()) if f.exists() else {}
-
-
-def update_run_meta(**fields: Any) -> None:
-    meta = run_meta()
-    meta.update(fields)
-    _run_file().write_text(json.dumps(meta, indent=1))
+        return datetime.fromisoformat(cfg.AS_OF.replace("Z", "+00:00")).astimezone(timezone.utc)
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    return now - timedelta(minutes=now.minute % round_minutes)
 
 
 def finalize() -> int:
     """
-    Keep only the fixtures used by this run (call at the end of a live run).
-    Returns the number of stale files removed. No-op in replay mode.
+    Keep only the cache files used by this run.
+    Returns the number of stale files removed.
     """
-    if cfg.REPLAY:
-        return 0
     removed = 0
     for kind in ("api", "llm"):
         for path in _dir(kind).glob("*.json*"):
@@ -133,7 +99,7 @@ def finalize() -> int:
 
 
 # --------------------------------------------------------------------------- #
-# Shared entity table (fixtures/entities.json)
+# Shared entity table (local fixtures/entities.json)
 # --------------------------------------------------------------------------- #
 def _entities_file() -> Path:
     cfg.FIXTURES_DIR.mkdir(parents=True, exist_ok=True)

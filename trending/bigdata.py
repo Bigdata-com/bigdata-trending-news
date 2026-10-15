@@ -3,8 +3,8 @@ Minimal Bigdata.com REST client.
 
 * Auth: `X-API-KEY` header, base URL https://api.bigdata.com
 * Retries: exponential backoff on HTTP 429 and 5xx (HTTP_RETRIES attempts)
-* Cache: every response is stored on disk (see cache.py), which also gives the
-  offline REPLAY mode
+* Cache: every response is stored on disk (see cache.py) and reused within
+  CACHE_TTL_SECONDS
 * Concurrency: `run_parallel()` runs calls with at most MAX_CONCURRENCY in
   flight and isolates failures (one bad entity never stops the run)
 
@@ -12,7 +12,6 @@ Endpoints used (request/response shapes verified against docs.bigdata.com):
 
     POST /v1/search                          articles (document + chunks)
     POST /v1/search/volume                   daily document counts + sentiment
-    POST /v1/search/co-mentions/entities     entities co-mentioned in a query
     POST /v1/knowledge-graph/<category>      find entity IDs by name/ticker
     POST /v1/knowledge-graph/entities/id     look up entity names by ID
 """
@@ -74,8 +73,7 @@ class BigdataClient:
         if self._http is None:
             if not self.api_key:
                 raise BigdataError(
-                    "BIGDATA_API_KEY is not set. Add it to your environment or .env, "
-                    "or run with REPLAY=True to use the saved fixtures."
+                    "BIGDATA_API_KEY is not set. Add it to your environment or .env."
                 )
             self._http = httpx.Client(
                 base_url=cfg.BIGDATA_BASE_URL,
@@ -90,8 +88,6 @@ class BigdataClient:
         hit = cache.get("api", key, ttl=cfg.CACHE_TTL_SECONDS)
         if hit is not None:
             return hit
-        if cfg.REPLAY:
-            raise BigdataError(f"REPLAY: no fixture for {path} (key {key}).")
 
         delay = 2.0
         last_err = ""
@@ -153,13 +149,6 @@ class BigdataClient:
         if group_by_source:
             body["group_by"] = ["source"]
         return self.post("/v1/search/volume", body).get("results", {})
-
-    def co_mentions(self, filters: dict[str, Any], text: str | None = None) -> dict[str, list[dict]]:
-        """Entities co-mentioned in matching news, grouped by category."""
-        query: dict[str, Any] = {"filters": filters}
-        if text:
-            query["text"] = text
-        return self.post("/v1/search/co-mentions/entities", {"query": query}).get("results", {})
 
     def kg_find(self, category: str, query: str, **extra: Any) -> list[dict[str, Any]]:
         """Knowledge Graph search, e.g. category='companies', query='AAPL'."""

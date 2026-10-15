@@ -7,10 +7,10 @@ story points **up or down**. Powered by [Bigdata.com](https://bigdata.com).
 
 ![Watchlist report](docs/report_watchlist.png)
 
-| | Notebook | Answers |
-|---|---|---|
-| 1 | [`notebooks/01_watchlist_trending.ipynb`](notebooks/01_watchlist_trending.ipynb) | *Which stories about my companies and entities are trending right now?* |
-| 2 | [`notebooks/02_commodities_trending.ipynb`](notebooks/02_commodities_trending.ipynb) | *Which gold, silver, copper, oil… stories are trending, and is the move up or down?* |
+| | Notebook | Answers | Run in the cloud |
+|---|---|---|---|
+| 1 | [`notebooks/01_watchlist_trending.ipynb`](notebooks/01_watchlist_trending.ipynb) | *Which stories about my companies and entities are trending right now?* | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Bigdata-com/bigdata-trending-news/blob/main/notebooks/01_watchlist_trending.ipynb) |
+| 2 | [`notebooks/02_commodities_trending.ipynb`](notebooks/02_commodities_trending.ipynb) | *Which gold, silver, copper, oil… stories are trending, and is the move up or down?* | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Bigdata-com/bigdata-trending-news/blob/main/notebooks/02_commodities_trending.ipynb) |
 
 Each notebook runs top to bottom in about 2 minutes ([run time](#run-time)) and ends with a **self-contained HTML report** (one file, no
 external assets, opens in any browser or can be emailed) plus CSV files in `outputs/`. Sample reports from a real
@@ -53,7 +53,6 @@ attention is.
 
 An AI model is used for the relevance filter (commodities), story grouping, titles and summaries, and up/down
 direction. **All counts, momentum figures and sentiment come from Bigdata.com data, never from the AI model.**
-Optional: `/v1/search/co-mentions/entities` finds companies trending *beyond* your watchlist.
 
 ```mermaid
 flowchart LR
@@ -81,14 +80,14 @@ flowchart LR
 
 ## Quick start
 
-**Requirements:** Python 3.10+ and a Bigdata.com API key. An LLM key (Anthropic or OpenAI) is optional.
+**Requirements:** Python 3.10+ and a Bigdata.com API key. An OpenAI API key is optional.
 
 ```bash
 cd trending-news-demo
 python3 -m venv .venv && source .venv/bin/activate     # Windows: py -m venv .venv && .venv\Scripts\activate
 python -m pip install -r requirements.txt               # "python -m pip" installs into the venv, never globally
 
-cp .env.example .env        # then add BIGDATA_API_KEY and ANTHROPIC_API_KEY (or OPENAI_API_KEY)
+cp .env.example .env        # then add BIGDATA_API_KEY and OPENAI_API_KEY
 jupyter lab notebooks/
 ```
 
@@ -98,17 +97,25 @@ jupyter lab notebooks/
 
 Open a notebook and choose **Run → Run All Cells**.
 
+**Or run it in Google Colab, with nothing to install:** click an **Open in Colab** badge above.
+
+1. Click the 🔑 **Secrets** icon in Colab's left sidebar and add `BIGDATA_API_KEY` and `OPENAI_API_KEY`.
+   Switch on **Notebook access** for each. A Bigdata.com key is required.
+2. **While the repository is private:** Colab asks you to authorise GitHub when you open the notebook. Allow it, and
+   tick *Include private repos*. Also add a `GITHUB_TOKEN` secret: a GitHub
+   [fine-grained token](https://github.com/settings/personal-access-tokens) with read-only *Contents* access to
+   this repository, so the setup cell can download the code.
+3. **Runtime → Run all.** The first code cell ("0. Google Colab only") downloads the code and installs the
+   packages (usually under a minute). Outside Colab it does nothing.
+4. Reports are saved in Colab's temporary storage, under `bigdata-trending-news/outputs/` (📁 Files panel); download
+   any you want to keep. The report is also shown inside the notebook.
+
 | Mode | When | What happens |
 |---|---|---|
-| **Live** | `BIGDATA_API_KEY` is set | Calls Bigdata.com (and the LLM), then saves every response to `fixtures/` |
-| **Replay** | no key, or `REPLAY=1` | Re-runs the saved run entirely from `fixtures/`: no keys, no network, a few seconds |
+| **Live** | `BIGDATA_API_KEY` is set | Calls Bigdata.com (and the LLM). Responses are cached locally for 10 minutes |
 | **No AI** | `cfg.USE_LLM = False` (or no LLM key) | Text-similarity grouping, headline titles, keyword-based direction |
 
-The repository ships with fixtures from a live run, so **both notebooks work offline straight after cloning**.
-
-**LLM provider.** Anthropic Claude is the default (`claude-sonnet-5-5`). OpenAI is also supported: set
-`LLM_PROVIDER=openai` (default model `gpt-4.1`). Override the model with `LLM_MODEL`. The committed sample run used
-OpenAI `gpt-4.1`; the Anthropic path was tested live as well.
+**LLM.** The notebooks use OpenAI GPT 5.6 (`OPENAI_API_KEY`). Override the model with `LLM_MODEL`.
 
 **Cost of a live run** (1-day window, defaults): Notebook 1 uses about 380 Bigdata.com query units (9 entities),
 Notebook 2 about 135 (4 commodities); about 40 and 20–30 LLM calls respectively. Re-running within 10 minutes reuses
@@ -125,12 +132,10 @@ duration, and the last cell of each notebook shows a table of time per step. Mea
 | Momentum (`/v1/search/volume`) | 3 s | 2 s |
 | Fetch → relevance gate → group → enrich → rank | 1 min 47 s | 1 min 36 s |
 | Emerging, report, save | under 1 s | under 1 s |
-| **Total, live** (Bigdata.com + OpenAI `gpt-4.1`) | **1 min 50 s** | **1 min 38 s** |
-| Total, replay | about 1 s | about 1 s |
+| **Total** (Bigdata.com + OpenAI) | **1 min 50 s** | **1 min 38 s** |
 
-Almost all of the live time is the AI model (grouping and enriching stories) and Bigdata.com calls, so it varies with
-the LLM provider's response times and with how much news there is. Replay mode and re-runs within 10 minutes (cache)
-take a few seconds.
+Almost all of the time is the AI model (grouping and enriching stories) and Bigdata.com calls, so it varies with
+the LLM provider's response times and with how much news there is. Re-runs within 10 minutes reuse the local cache.
 
 ---
 
@@ -212,7 +217,6 @@ GitHub Actions `schedule:`), with the API keys supplied as secrets / environment
 | Overlapping runs | If the previous run is still going, the new one is skipped (lock file `outputs/runs/.lock`, ignored once older than 2 hours). |
 | Disk | Run folders older than 7 days are deleted automatically; change with `--keep-days 3`. Each run is about 1-2 MB. |
 | Failures | The script exits with a non-zero code (schedulers can alert on it), records the error in `run.log`, and keeps the partly executed notebook in the run folder so you can see which cell failed. |
-| Replay data | Each live run refreshes `fixtures/` (the offline replay data) with its own responses, so replay always reproduces the most recent run. |
 | Comparing hours | The 1-day window is a rolling 24 hours, so each hourly run shows how rankings moved. Compare `outputs/runs/*/watchlist_*_trending.csv` to track a story's rank over the day. |
 | Seeing the run | Open `outputs/latest/*.html` for the newest report, or an executed notebook in a run folder for every table and the ⏱ timings. |
 
@@ -286,7 +290,7 @@ gantt
 
 | Step | Module | What it does |
 |---|---|---|
-| 1. Resolve | [`resolve.py`](trending/resolve.py) | Tickers → `/v1/knowledge-graph/companies` (validated against known IDs). Free text → companies, organizations, people, concepts, products, places. Commodities → concepts of type *Commodity*. If several entities match, the one with the most news in the past week wins. Unresolvable commodities run in **keyword mode** (search phrases, no entity filter). Cached in `fixtures/entities.json`. |
+| 1. Resolve | [`resolve.py`](trending/resolve.py) | Tickers → `/v1/knowledge-graph/companies` (validated against known IDs). Free text → companies, organizations, people, concepts, products, places. Commodities → concepts of type *Commodity*. If several entities match, the one with the most news in the past week wins. Unresolvable commodities run in **keyword mode** (search phrases, no entity filter). Resolved IDs are cached locally in `fixtures/entities.json` (not committed). |
 | 2. Momentum | [`momentum.py`](trending/momentum.py) | `/v1/search/volume`, NEWS only. **Call A** (baseline + current, daily buckets) → baseline average per day and the sparkline. **Call B** (current window, `group_by: ["source"]`) → `current_docs = total.documents`, `distinct_sources = len(groups.sources)`, `total.sentiment`. **`spike = (current_docs + 1) / (baseline_per_period + 1)`** |
 | 3. Fetch | [`fetch.py`](trending/fetch.py) | `/v1/search`, fast mode, NEWS, entity filter (`search_in: HEADLINE` by default), current window, `max_chunks: 1000`. De-duplicated to documents: ID, headline, source, source rank, time, URL, best chunk, sentiment. |
 | Gate | [`enrich.py`](trending/enrich.py) | *Notebook 2 only.* Each article → `market_move` / `company_specific` / `irrelevant`; keeps `market_move`. Without AI: drops `(TSXV:XXX)`-style tickers, "stocks to buy" and question-style promo headlines. |
@@ -348,10 +352,9 @@ configuration cell (`cfg.NAME = value`).
 | `EMERGING_MAX_SOURCE_RANK` | 2 | Single-source Emerging stories need an outlet of rank 1–2 |
 | `EMERGING_MIN_MATERIALITY`, `EMERGING_TOP_N` | 4, 10 | Emerging: AI materiality floor; list length |
 | `GATE_KEEP` | `["market_move"]` | Notebook 2: article classes kept by the relevance gate |
-| `USE_LLM`, `LLM_PROVIDER`, `LLM_MODEL` | on, auto, per provider | AI model on/off and choice |
+| `USE_LLM`, `LLM_MODEL` | on, `gpt-5.6` | AI model on/off; OpenAI model name |
 | `LEXICAL_JACCARD` | 0.6 | No-AI grouping: headline word overlap needed to join a story |
 | `CROSS_ENTITY_OVERLAP`, `ENTITY_MIN_SHARE`, `DEDUPE_TOP_K` | 0.5, 0.3, 60 | Story merging across entities, entity chips, final duplicate pass |
-| `DISCOVERY_*` | top 10 | Notebook 1 optional "beyond your watchlist" section |
 | `external_engagement_score()` | 0 | Function in `rank.py`: add your own click/read data |
 
 ### Emerging settings used in this demo
@@ -396,16 +399,14 @@ Where the live API behaves differently from what its field names suggest, the co
 | Timestamps | Search returns `2026-10-13T05:30:18` without a timezone; treated as UTC. |
 | Search body | `query.max_chunks` (≤ 1000) is the chunk-limit field. `query.text` and `query.texts` are mutually exclusive, and **more than one `texts` requires `ranking_params.reranker.text`**, which the client sets automatically. |
 | Volume | `results.volume[]` = daily `{date, documents, chunks, sentiment}`; with `group_by: ["source"]`, `results.groups.sources[]` = `{id, documents, chunks}` (no source names, which are taken from search results). Timestamp span ≤ 1 year. |
-| Co-mentions | Returns only each window's top entities per category, and some entries carry only `total_chunks_count`. A company absent from the baseline list therefore shows a baseline of 0. Discovery uses co-mentions (several query phrasings) to **shortlist**, then measures each candidate's true baseline with `/v1/search/volume` and ranks by `spike × log(1 + documents)`. |
 | Knowledge Graph | `POST /v1/knowledge-graph/{companies,concepts,organizations,people,products,places}` with `{"query": …}` → `results[]`. Commodities are **concepts** with `type: "Commodity"` (Gold `9768FE`, Silver `F96E34`, Copper `A4090F`, Crude Oil `FD9CFE`); product search returns consumer products and is not used for them. Names for IDs come from `/v1/knowledge-graph/entities/id`. |
 | Entity disambiguation | Free-text names often match many entities (e.g. "Federal Reserve" → the central bank and regional Fed banks). The best name matches are compared by past-week news volume: "OpenAI" → *OpenAI Foundation* (`UWCVKI`), "Federal Reserve" → *United States Federal Reserve* (`F38FC4`). |
-| Claude sampling | Current Claude models do not accept `temperature`. Determinism comes from low effort, strict JSON instructions, validation and the prompt cache. OpenAI calls use `temperature=0` and JSON mode. Claude calls opt into server-side refusal fallbacks. |
+| OpenAI calls | Temperature 0 and JSON mode. The default model is `gpt-5.6`. |
 | Story quality safeguards | (a) Stories from different entities merge only if they share ≥ 50% of the smaller story's articles, so a single round-up article cannot chain unrelated stories. (b) A final pass merges duplicates among the top 60 stories, only when they share an entity. (c) "Miscellaneous"-style catch-all groups returned by the model are regrouped lexically. (d) An entity chip is shown only if the entity is detected in ≥ 30% of the story's articles. |
-| Fixtures | API and LLM responses are stored as gzipped JSON, keyed by a hash of the request/prompt; `run.json` stores the run time and the LLM model used. A live run prunes fixtures it did not use, so `fixtures/` always mirrors the last live run. |
+| Local cache | API and LLM responses are stored as gzipped JSON under `fixtures/`, keyed by a hash of the request/prompt. API entries expire after 10 minutes. `fixtures/` is gitignored. |
 
-**Testing performed** (live, 13 Oct 2026): both notebooks executed top to bottom live with Bigdata.com + OpenAI
-`gpt-4.1`; the Anthropic `claude-sonnet-5-5` path and the Discovery section were run live separately; both notebooks
-were then re-run in REPLAY mode with all API keys removed, and with `USE_LLM=False`. The top stories were inspected
+**Testing performed** (live, 13 Oct 2026): both notebooks executed top to bottom live with Bigdata.com and OpenAI;
+both notebooks were then re-run with `USE_LLM=False`. The top stories were inspected
 for misclusters and junk; that review led to the safeguards above.
 
 ---
@@ -417,27 +418,26 @@ trending-news-demo/
 ├── README.md
 ├── LICENSE                       MIT
 ├── requirements.txt
-├── .env.example                  BIGDATA_API_KEY, ANTHROPIC_API_KEY / OPENAI_API_KEY, LLM_MODEL
+├── .env.example                  BIGDATA_API_KEY, OPENAI_API_KEY, LLM_MODEL
 ├── notebooks/
 │   ├── 01_watchlist_trending.ipynb
 │   └── 02_commodities_trending.ipynb
 ├── trending/                     shared package (the notebooks stay thin)
 │   ├── config.py                 every weight, threshold, window and entity list
-│   ├── bigdata.py                REST client: search, volume, co-mentions, KG; retries, cache, concurrency ≤ 5
-│   ├── cache.py                  disk cache = offline fixtures (REPLAY mode)
+│   ├── bigdata.py                REST client: search, volume, KG; retries, cache, concurrency ≤ 5
+│   ├── cache.py                  local disk cache for API and LLM responses
 │   ├── resolve.py                names / tickers → entity IDs (Knowledge Graph)
 │   ├── momentum.py               baseline vs current, source breadth, sparkline data
 │   ├── fetch.py                  current-window news, de-duplicated to documents
-│   ├── llm.py                    provider-agnostic LLM wrapper (Anthropic default, OpenAI), JSON helpers
+│   ├── llm.py                    OpenAI wrapper (GPT 5.6), JSON helpers
 │   ├── cluster.py                articles → stories (AI, with lexical fallback)
 │   ├── enrich.py                 titles, summaries, direction, driver, materiality; relevance gate
 │   ├── rank.py                   trend score, Emerging list, engagement hook
 │   ├── render.py                 HTML report, DataFrames, CSV
-│   ├── pipeline.py               glue used by the notebooks; discovery
+│   ├── pipeline.py               glue used by the notebooks
 │   └── timing.py                 per-cell ⏱ timer and run-time summary
 ├── scripts/
 │   └── run_notebooks.py          headless runner for scheduled (e.g. hourly) runs
-├── fixtures/                     saved API + LLM responses of the last live run (offline replay)
 ├── outputs/                      generated reports (git-ignored); outputs/samples/ = committed examples;
 │                                 outputs/runs/ and outputs/latest/ = scheduled runs
 └── docs/                         images used in this README
@@ -452,4 +452,4 @@ and skipped); a 10-minute disk cache; no secrets in code or notebooks.
 ## License
 
 The code is released under the [MIT License](LICENSE). News content returned by Bigdata.com (including the
-saved responses in `fixtures/` and the sample reports) remains subject to your Bigdata.com terms of use.
+sample reports) remains subject to your Bigdata.com terms of use.

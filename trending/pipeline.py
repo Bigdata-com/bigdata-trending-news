@@ -8,17 +8,16 @@ Orchestration helpers that chain the steps, so each notebook cell stays short.
     trending  = rank_trending(stories)                            # Step 6
     emerging  = rank_emerging(stories, trending, win, use_llm)    # Step 6b
     ...render...                                                  # Step 7
-    finish(client, llm)                                           # save fixtures
+    finish(client, llm)                                           # usage + local cache
 """
 from __future__ import annotations
 
 import logging
-import math
 import time
 
 from . import cache
 from . import config as cfg
-from .bigdata import BigdataClient, news_filters
+from .bigdata import BigdataClient
 from .cluster import Story, cluster_all, dedupe_top
 from .enrich import enrich_stories, relevance_gate
 from .fetch import Article, fetch_all
@@ -31,21 +30,13 @@ logging.basicConfig(level=logging.ERROR, format="%(levelname)s %(message)s")
 
 
 def start(namespace: str) -> tuple[BigdataClient, LLM | None, Window]:
-    """Pick the fixtures folder, fix the run clock, create the clients."""
+    """Pick the cache folder, fix the run clock, create the clients."""
     cache.set_namespace(namespace)
     as_of = cache.run_clock()
     win = make_window(as_of)
     client = BigdataClient()
     llm = get_llm()
-    if cfg.REPLAY and llm is not None:
-        # answers come from fixtures: report the model that actually produced them
-        meta = cache.run_meta()
-        if "llm" in meta and meta["llm"] is None:
-            llm = None  # the saved run did not use an LLM
-        elif meta.get("llm"):
-            llm.provider, llm.model = meta["llm"]["provider"], meta["llm"]["model"]
-    mode = "REPLAY (offline, from fixtures/)" if cfg.REPLAY else "LIVE"
-    print(f"Mode: {mode} · window {cfg.WINDOW}: {win.current_start:%Y-%m-%d %H:%M} → {win.as_of:%Y-%m-%d %H:%M} UTC")
+    print(f"Window {cfg.WINDOW}: {win.current_start:%Y-%m-%d %H:%M} → {win.as_of:%Y-%m-%d %H:%M} UTC")
     print(f"LLM: {llm if llm else 'off (lexical grouping, headline titles)'}")
     return client, llm, win
 
@@ -118,87 +109,11 @@ def build_stories(
 
 
 def finish(client: BigdataClient, llm: LLM | None) -> None:
-    """Print usage and keep the fixtures for offline REPLAY."""
+    """Print usage and drop cache files this run did not touch."""
     removed = cache.finalize()
-    if not cfg.REPLAY:
-        cache.update_run_meta(llm={"provider": llm.provider, "model": llm.model} if llm else None)
-    if cfg.REPLAY:
-        print("Replay run: nothing was fetched.")
-        return
     llm_part = f", LLM calls {llm.calls} ({llm.seconds:.0f} s summed over parallel calls, {llm.cache_hits} from cache)" if llm else ""
     print(f"Bigdata.com query units used this session: {client.query_units:.1f}{llm_part}")
-    print(f"Fixtures saved under {(cfg.FIXTURES_DIR / cache._namespace).relative_to(cfg.ROOT)}/ (removed {removed} stale files).")
-
-
-# --------------------------------------------------------------------------- #
-# Discovery: "also trending beyond your watchlist" (Notebook 1, optional)
-# --------------------------------------------------------------------------- #
-def _ticker_of(info: dict) -> str:
-    for listing in info.get("listing_values") or []:
-        mic, _, sym = str(listing).partition(":")
-        if mic in {"XNAS", "XNYS", "ARCX", "BATS", "XASE"} and sym:
-            return sym
-    return ""
-
-
-def discover_companies(
-    client: BigdataClient, win: Window, exclude_ids: set[str], verbose: bool = True
-) -> tuple[list[Entity], dict[str, Momentum]]:
-    """
-    Companies trending beyond the watchlist.
-
-    1. Shortlist: /v1/search/co-mentions/entities (news, several query phrasings)
-       for the current and baseline windows, ranked by
-       (current+1) / (baseline_per_period+1) × log(1+current).
-    2. Co-mentions only returns each window's top entities, so a company missing
-       from the baseline list shows a baseline of 0. The shortlist's real
-       baseline is therefore measured with /v1/search/volume (same momentum as
-       the watchlist), and the final ranking is spike × log(1 + current_docs).
-    Returns (entities, their momentum).
-    """
-    def counts(start, end) -> dict[str, int]:
-        """Headline co-mention counts per company, max over the query phrasings."""
-        out: dict[str, int] = {}
-        for text in cfg.DISCOVERY_QUERY_TEXTS:
-            res = client.co_mentions(news_filters(start, end), text)
-            for c in res.get("companies", []):
-                out[c["id"]] = max(out.get(c["id"], 0), int(c.get("total_headlines_count") or 0))
-        return out
-
-    c_now = counts(win.current_start, win.as_of)
-    c_base = counts(win.baseline_start, win.current_start)
-    scale = win.period_days / win.baseline_days
-    shortlist = []
-    for cid, n in c_now.items():
-        if cid in exclude_ids or n < cfg.DISCOVERY_MIN_CURRENT:
-            continue
-        b = c_base.get(cid, 0) * scale
-        shortlist.append((cid, (n + 1) / (b + 1) * math.log1p(n)))
-    shortlist.sort(key=lambda x: -x[1])
-
-    info = client.kg_by_ids([c for c, _ in shortlist[: cfg.DISCOVERY_TOP_N * 3]])
-    candidates: list[Entity] = []
-    for cid, _ in shortlist:
-        meta = info.get(cid, {})
-        name = meta.get("name", "")
-        if not name or name in cfg.DISCOVERY_DENYLIST:
-            continue
-        key = _ticker_of(meta) or name.split(" ")[0]
-        candidates.append(Entity(key=key, input=name, kind="company", id=cid, name=name,
-                                 type=meta.get("type", ""), category="companies", note="discovered"))
-        if len(candidates) >= cfg.DISCOVERY_TOP_N * 3:
-            break
-
-    momentum = compute_momentum(client, candidates, win)
-    ranked = sorted((e for e in candidates if e.key in momentum),
-                    key=lambda e: -momentum[e.key].spike * math.log1p(momentum[e.key].current_docs))
-    top = ranked[: cfg.DISCOVERY_TOP_N]
-    if verbose:
-        print(f"   {'key':<8} {'company':<40} {'docs now':>9} {'usual':>7} {'spike':>6}")
-        for e in top:
-            m = momentum[e.key]
-            print(f"   {e.key:<8} {e.name[:40]:<40} {m.current_docs:>9,} {m.baseline_per_period:>7,.0f} {m.spike:>5.1f}×")
-    return top, {e.key: momentum[e.key] for e in top}
+    print(f"Local cache: {(cfg.FIXTURES_DIR / cache._namespace).relative_to(cfg.ROOT)}/ (removed {removed} stale files).")
 
 
 # --------------------------------------------------------------------------- #
