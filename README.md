@@ -101,13 +101,9 @@ Open a notebook and choose **Run → Run All Cells**.
 
 1. Click the 🔑 **Secrets** icon in Colab's left sidebar and add `BIGDATA_API_KEY` and `OPENAI_API_KEY`.
    Switch on **Notebook access** for each. A Bigdata.com key is required.
-2. **While the repository is private:** Colab asks you to authorise GitHub when you open the notebook. Allow it, and
-   tick *Include private repos*. Also add a `GITHUB_TOKEN` secret: a GitHub
-   [fine-grained token](https://github.com/settings/personal-access-tokens) with read-only *Contents* access to
-   this repository, so the setup cell can download the code.
-3. **Runtime → Run all.** The first code cell ("0. Google Colab only") downloads the code and installs the
+2. **Runtime → Run all.** The first code cell ("0. Google Colab only") downloads the code and installs the
    packages (usually under a minute). Outside Colab it does nothing.
-4. Reports are saved in Colab's temporary storage, under `bigdata-trending-news/outputs/` (📁 Files panel); download
+3. Reports are saved in Colab's temporary storage, under `bigdata-trending-news/outputs/` (📁 Files panel); download
    any you want to keep. The report is also shown inside the notebook.
 
 | Mode | When | What happens |
@@ -118,21 +114,21 @@ Open a notebook and choose **Run → Run All Cells**.
 **LLM.** The notebooks use OpenAI GPT 5.6 (`OPENAI_API_KEY`). Override the model with `LLM_MODEL`.
 
 **Cost of a live run** (1-day window, defaults): Notebook 1 uses about 380 Bigdata.com query units (9 entities),
-Notebook 2 about 135 (4 commodities); about 40 and 20–30 LLM calls respectively. Re-running within 10 minutes reuses
+Notebook 2 about 140 (4 commodities); about 47 and 33 LLM calls respectively. Re-running within 10 minutes reuses
 the cached responses at no cost.
 
 ### Run time
 
 Every code cell prints how long it took when it finishes (`⏱ 12.3 s`), each notebook section states its typical
-duration, and the last cell of each notebook shows a table of time per step. Measured on the reference live run:
+duration, and the last cell of each notebook shows a table of time per step. Measured on the reference live run (15 Oct 2026, OpenAI `gpt-5.6`):
 
 | Step | Notebook 1 (9 entities) | Notebook 2 (4 commodities) |
 |---|---|---|
-| Setup, configuration, resolve entities | under 1 s | under 1 s |
-| Momentum (`/v1/search/volume`) | 3 s | 2 s |
-| Fetch → relevance gate → group → enrich → rank | 1 min 47 s | 1 min 36 s |
+| Setup, configuration, resolve entities | under 1 s | under 1 s (about 9 s the first time) |
+| Momentum (`/v1/search/volume`) | 4 s | 2 s |
+| Fetch → relevance gate → group → enrich → de-duplicate → rank | 1 min 45 s | 1 min 42 s |
 | Emerging, report, save | under 1 s | under 1 s |
-| **Total** (Bigdata.com + OpenAI) | **1 min 50 s** | **1 min 38 s** |
+| **Total** (Bigdata.com + OpenAI) | **1 min 49 s** | **1 min 45 s** |
 
 Almost all of the time is the AI model (grouping and enriching stories) and Bigdata.com calls, so it varies with
 the LLM provider's response times and with how much news there is. Re-runs within 10 minutes reuse the local cache.
@@ -295,7 +291,7 @@ gantt
 | 3. Fetch | [`fetch.py`](trending/fetch.py) | `/v1/search`, fast mode, NEWS, entity filter (`search_in: HEADLINE` by default), current window, `max_chunks: 1000`. De-duplicated to documents: ID, headline, source, source rank, time, URL, best chunk, sentiment. |
 | Gate | [`enrich.py`](trending/enrich.py) | *Notebook 2 only.* Each article → `market_move` / `company_specific` / `irrelevant`; keeps `market_move`. Without AI: drops `(TSXV:XXX)`-style tickers, "stocks to buy" and question-style promo headlines. |
 | 4. Group | [`cluster.py`](trending/cluster.py) | AI groups articles reporting the **same specific event** (batches of ≤ 120, strict JSON, validated: every article exactly once). Batches and entities are merged when they overlap; a final pass merges duplicates among the top 60. Without AI: headline word-overlap (Jaccard ≥ 0.6, union-find). Story stats are computed **in code**: `articles`, distinct `sources`, `first_seen`, `last_seen`, `avg_sentiment`. |
-| 5. Enrich | [`enrich.py`](trending/enrich.py) | For the top ~30 stories (+ Emerging candidates): `title`, `summary`, `direction`, `driver`, `materiality` (1–5), `representative_id`. The model uses only the supplied text and answers `n/a` rather than guess. |
+| 5. Enrich | [`enrich.py`](trending/enrich.py) | For the top ~30 stories (+ Emerging candidates): `title`, `summary`, `direction`, `driver`, `materiality` (1–5), `representative_id`. The model uses only the supplied text and answers `n/a` rather than guess. **Then a final de-duplication** compares all enriched stories (Trending and Emerging candidates) by their final title and summary, one entity at a time, so the same event, or successive steps of one case (a lawsuit, a hearing in it, an agreement in it), appears once. |
 | 6. Rank | [`rank.py`](trending/rank.py) | Trend score (below); Trending keeps stories with ≥ 2 sources, top 20. Emerging (6b) is a separate list. |
 | 7. Render | [`render.py`](trending/render.py) | HTML report (dark theme, inline SVG sparklines, expandable member lists), DataFrames, CSVs. |
 
@@ -354,14 +350,14 @@ configuration cell (`cfg.NAME = value`).
 | `GATE_KEEP` | `["market_move"]` | Notebook 2: article classes kept by the relevance gate |
 | `USE_LLM`, `LLM_MODEL` | on, `gpt-5.6` | AI model on/off; OpenAI model name |
 | `LEXICAL_JACCARD` | 0.6 | No-AI grouping: headline word overlap needed to join a story |
-| `CROSS_ENTITY_OVERLAP`, `ENTITY_MIN_SHARE`, `DEDUPE_TOP_K` | 0.5, 0.3, 60 | Story merging across entities, entity chips, final duplicate pass |
+| `CROSS_ENTITY_OVERLAP`, `ENTITY_MIN_SHARE`, `DEDUPE_TOP_K`, `FINAL_DEDUPE_TOP_K` | 0.5, 0.3, 60, 100 | Story merging across entities, entity chips, duplicate pass before / after enrichment |
 | `external_engagement_score()` | 0 | Function in `rank.py`: add your own click/read data |
 
 ### Emerging settings used in this demo
 
 | Notebook | `SENTIMENT_MODE` | `SENTIMENT_EXTREME` | Why |
 |---|---|---|---|
-| 1. Watchlist | `"mean"` | 0.5 | Company news has a clear tone; the list fills with 7–10 strong items per day (lawsuits, fines, analyst upgrades). |
+| 1. Watchlist | `"mean"` | 0.5 | Company news has a clear tone; the list fills with 6–10 strong items per day (lawsuits, fines, regulatory probes). |
 | 2. Commodities | `"max_abs"` | 0.5 | Commodity news is mostly neutral price reporting, which dilutes a story's *mean* sentiment, and with `"mean"` the list was nearly empty. `"max_abs"` uses the strongest passage, so sharp but quiet events (a mine strike threat, a central bank selling gold) appear. |
 
 If the list is still too quiet, lower `SENTIMENT_EXTREME` to about 0.35. If it is too noisy, raise it or set
@@ -401,13 +397,14 @@ Where the live API behaves differently from what its field names suggest, the co
 | Volume | `results.volume[]` = daily `{date, documents, chunks, sentiment}`; with `group_by: ["source"]`, `results.groups.sources[]` = `{id, documents, chunks}` (no source names, which are taken from search results). Timestamp span ≤ 1 year. |
 | Knowledge Graph | `POST /v1/knowledge-graph/{companies,concepts,organizations,people,products,places}` with `{"query": …}` → `results[]`. Commodities are **concepts** with `type: "Commodity"` (Gold `9768FE`, Silver `F96E34`, Copper `A4090F`, Crude Oil `FD9CFE`); product search returns consumer products and is not used for them. Names for IDs come from `/v1/knowledge-graph/entities/id`. |
 | Entity disambiguation | Free-text names often match many entities (e.g. "Federal Reserve" → the central bank and regional Fed banks). The best name matches are compared by past-week news volume: "OpenAI" → *OpenAI Foundation* (`UWCVKI`), "Federal Reserve" → *United States Federal Reserve* (`F38FC4`). |
-| OpenAI calls | Temperature 0 and JSON mode. The default model is `gpt-5.6`. |
-| Story quality safeguards | (a) Stories from different entities merge only if they share ≥ 50% of the smaller story's articles, so a single round-up article cannot chain unrelated stories. (b) A final pass merges duplicates among the top 60 stories, only when they share an entity. (c) "Miscellaneous"-style catch-all groups returned by the model are regrouped lexically. (d) An entity chip is shown only if the entity is detected in ≥ 30% of the story's articles. |
+| OpenAI calls | JSON mode. The default model is `gpt-5.6`; GPT-5-family and o-series reasoning models accept only their default temperature, so they run with `reasoning_effort="low"` and `max_completion_tokens`. Older models such as `gpt-4.1` run with temperature 0. If an AI call fails, the step uses its non-AI fallback and the notebook prints a ⚠ warning. |
+| Story quality safeguards | (a) Stories from different entities merge only if they share ≥ 50% of the smaller story's articles, so a single round-up article cannot chain unrelated stories. (b) Two de-duplication passes: before enrichment, among the top 60 stories by label and sample headlines; after enrichment, among all enriched stories by final title and summary (one list per entity, so the model compares a short list). Both merge only stories that share an entity, and never stories pointing in opposite price directions. (c) "Miscellaneous"-style catch-all groups returned by the model are regrouped lexically. (d) An entity chip is shown only if the entity is detected in ≥ 30% of the story's articles. |
 | Local cache | API and LLM responses are stored as gzipped JSON under `fixtures/`, keyed by a hash of the request/prompt. API entries expire after 10 minutes. `fixtures/` is gitignored. |
 
-**Testing performed** (live, 13 Oct 2026): both notebooks executed top to bottom live with Bigdata.com and OpenAI;
-both notebooks were then re-run with `USE_LLM=False`. The top stories were inspected
-for misclusters and junk; that review led to the safeguards above.
+**Testing performed** (live, 13–15 Oct 2026): both notebooks executed top to bottom live with Bigdata.com and
+OpenAI (`gpt-4.1`, then `gpt-5.6`), and with `USE_LLM=False`. The top stories were inspected
+for misclusters, duplicates and junk; that review led to the safeguards above (the post-enrichment de-duplication was
+added after repeated stories were seen in the watchlist report).
 
 ---
 

@@ -398,6 +398,90 @@ def dedupe_top(stories: list[Story], llm: LLM | None, top_k: int | None = None) 
     return out + tail
 
 
+FINAL_MERGE_PROMPT = """These are the leading news stories of a "what is trending" report. Each line has an id, the
+entities it is filed under, its title, its one-sentence summary and its driver. A reader must never see the same
+story twice. Identify stories that a reader would consider the SAME story:
+
+- the same event or announcement reported with different wording (e.g. two titles about the same inflation report
+  and what it means for rate-hike bets), or
+- successive developments of the same specific case, dispute, deal, investigation or launch within this window (e.g.
+  a lawsuit being filed, a court hearing in it and an agreement in it), or
+- a market reaction story filed under the same entity that is driven by that same event.
+
+Keep stories separate when they are about different events, even for the same entity and theme, and when they point
+in opposite directions. Same broad theme ("AI", "inflation", "oil") is NOT enough.
+
+Return JSON: {{"groups": [[1, 4], [2, 7, 9]]}}  (only groups of 2 or more; list the most important story first)
+
+Stories (id | entities | title | summary | driver):
+{rows}"""
+
+
+def collapse_enriched(stories: list[Story], llm: LLM | None, top_k: int | None = None) -> tuple[list[Story], int]:
+    """
+    Final de-duplication of all enriched stories (title + summary), which catches
+    the same event told twice and successive steps of one case, also between a
+    Trending story and an Emerging candidate. Merged stories keep
+    the enrichment of their highest-scoring member and only stories that share an
+    entity are merged. Expects stories sorted by score. Returns (stories, merges).
+    """
+    if llm is None:
+        return stories, 0
+    top_k = top_k or cfg.FINAL_DEDUPE_TOP_K
+    head = [s for s in stories if s.enriched][:top_k]
+    if len(head) < 2:
+        return stories, 0
+    # One short list per entity (more reliable than one long list); stories filed
+    # under several entities appear in several lists and are joined by union-find.
+    by_entity: dict[str, list[int]] = {}
+    for i, s in enumerate(head):
+        for e in s.entities:
+            by_entity.setdefault(e, []).append(i)
+    tasks = [ids for ids in by_entity.values() if len(ids) >= 2]
+
+    def ask(ids: list[int]) -> list[list[int]]:
+        rows = "\n".join(
+            f"{n + 1} | {', '.join(head[i].entities)} | {head[i].title} | {head[i].summary[:220]} | {head[i].driver}"
+            for n, i in enumerate(ids)
+        )
+        data = llm.json(CLUSTER_SYSTEM, FINAL_MERGE_PROMPT.format(rows=rows))
+        groups = data.get("groups") if data else None
+        if not isinstance(groups, list):
+            return []
+        return [[ids[int(x) - 1] for x in g if str(x).isdigit() and 1 <= int(x) <= len(ids)]
+                for g in groups if isinstance(g, list)]
+
+    answers = run_parallel(ask, tasks, label=lambda ids: "final dedupe", workers=cfg.LLM_CONCURRENCY)
+    uf = _UF(len(head))
+    for groups in answers.values():
+        for idx in groups:
+            for k in idx[1:]:
+                # safety net: same entity, and not opposite price directions
+                a, b = head[idx[0]], head[k]
+                opposite = {a.direction, b.direction} == {"up", "down"}
+                if set(a.entities) & set(b.entities) and not opposite:
+                    uf.union(idx[0], k)
+    absorbed: set[int] = set()
+    for g in uf.groups():
+        if len(g) < 2:
+            continue
+        lead = max((head[i] for i in g), key=lambda s: s.trend)
+        docs = {a.doc_id: a for a in lead.members}
+        for i in g:
+            s = head[i]
+            if s is lead:
+                continue
+            for a in s.members:
+                docs.setdefault(a.doc_id, a)
+            lead.entities += [e for e in s.entities if e not in lead.entities]
+            if s.materiality and (lead.materiality or 0) < s.materiality:
+                lead.materiality = s.materiality
+            absorbed.add(id(s))
+        lead.members = list(docs.values())
+        lead.compute_stats()
+    return [s for s in stories if id(s) not in absorbed], len(absorbed)
+
+
 def entity_label(key: str, names: dict[str, str]) -> str:
     name = names.get(key, "")
     return f"{name} ({key})" if name and name != key else key

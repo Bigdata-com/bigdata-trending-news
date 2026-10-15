@@ -98,6 +98,10 @@ CROSS_ENTITY_OVERLAP = 0.5
 ENTITY_MIN_SHARE = 0.3
 # Final de-duplication pass over the top-K candidate stories (by provisional score).
 DEDUPE_TOP_K = 60
+# Second pass after enrichment: all enriched stories (Trending and Emerging
+# candidates) are compared by their final title and summary, so the same event,
+# or successive steps of one case, is shown once across both lists.
+FINAL_DEDUPE_TOP_K = 100
 
 # --------------------------------------------------------------------------- #
 # Ranking: Trending

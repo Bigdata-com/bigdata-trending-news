@@ -4,7 +4,9 @@ OpenAI wrapper with JSON helpers and a prompt cache.
     llm = get_llm()                 # None when USE_LLM=False or no API key
     data = llm.json(system, user)   # -> dict (or None if the model failed)
 
-Calls go to OpenAI (default model gpt-5.6) with temperature 0 and JSON mode.
+Calls go to OpenAI (default model gpt-5.6) in JSON mode. Reasoning models (gpt-5.x,
+o-series) accept only their default temperature, so they run with low reasoning
+effort; older models (e.g. gpt-4.1) run with temperature 0.
 Every response is cached under fixtures/<namespace>/llm/ keyed by a hash of the
 prompt, so a repeated prompt is not sent to the model again.
 """
@@ -31,6 +33,8 @@ class LLM:
         self.calls = 0       # live calls made this session
         self.cache_hits = 0
         self.seconds = 0.0   # total wall time spent in live calls
+        self.failures = 0    # prompts that failed after retries (the step used its fallback)
+        self.last_error = ""
 
     def __repr__(self) -> str:
         return f"LLM(provider={self.provider!r}, model={self.model!r})"
@@ -56,6 +60,10 @@ class LLM:
                 log.warning("LLM returned non-JSON (attempt %d)", attempt + 1)
             except Exception as exc:  # noqa: BLE001 - never break the pipeline on LLM errors
                 log.warning("LLM call failed (attempt %d): %s", attempt + 1, exc)
+                self.last_error = str(exc)[:300]
+        if not self.failures:  # say it once, visibly: the run continues with fallbacks
+            print(f"⚠ AI call failed, using the non-AI fallback for this step: {self.last_error or 'invalid JSON'}")
+        self.failures += 1
         return None
 
     # ------------------------------------------------------------------ #
@@ -64,13 +72,17 @@ class LLM:
 
         if self._client is None:
             self._client = openai.OpenAI(max_retries=3)
-        resp = self._client.chat.completions.create(
-            model=self.model,
-            temperature=0,
-            max_tokens=max_tokens,
-            response_format={"type": "json_object"},
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        )
+        params: dict[str, Any] = {
+            "model": self.model,
+            "max_completion_tokens": max_tokens,
+            "response_format": {"type": "json_object"},
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        }
+        if self.model.startswith(("gpt-5", "o1", "o3", "o4")):
+            params["reasoning_effort"] = "low"   # fixed temperature; keep reasoning short
+        else:
+            params["temperature"] = 0
+        resp = self._client.chat.completions.create(**params)
         return resp.choices[0].message.content or ""
 
 

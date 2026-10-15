@@ -18,11 +18,11 @@ import time
 from . import cache
 from . import config as cfg
 from .bigdata import BigdataClient
-from .cluster import Story, cluster_all, dedupe_top
+from .cluster import Story, cluster_all, collapse_enriched, dedupe_top
 from .enrich import enrich_stories, relevance_gate
 from .fetch import Article, fetch_all
 from .llm import LLM, get_llm
-from .momentum import Momentum, Window, compute_momentum, make_window
+from .momentum import Momentum, Window, make_window
 from .rank import score_all, select_for_enrichment
 from .resolve import Entity
 
@@ -103,6 +103,12 @@ def build_stories(
         print(f"Step 5  no LLM: story titles = best-ranked outlet's headline{extra}")
 
     score_all(stories, momentum, win, include_materiality=llm is not None)
+    stories.sort(key=lambda s: -s.trend)
+    stories, n_merged = collapse_enriched(stories, llm)
+    if n_merged:
+        score_all(stories, momentum, win, include_materiality=True)
+        if verbose:
+            print(f"        merged {n_merged} more duplicates by title and summary  ({time.time() - t0:.0f}s)")
     if verbose:
         print("Step 6  scored all stories")
     return stories, articles, gate_stats
@@ -113,6 +119,8 @@ def finish(client: BigdataClient, llm: LLM | None) -> None:
     removed = cache.finalize()
     llm_part = f", LLM calls {llm.calls} ({llm.seconds:.0f} s summed over parallel calls, {llm.cache_hits} from cache)" if llm else ""
     print(f"Bigdata.com query units used this session: {client.query_units:.1f}{llm_part}")
+    if llm and llm.failures:
+        print(f"⚠ {llm.failures} AI prompts failed and used the non-AI fallback. Last error: {llm.last_error}")
     print(f"Local cache: {(cfg.FIXTURES_DIR / cache._namespace).relative_to(cfg.ROOT)}/ (removed {removed} stale files).")
 
 
