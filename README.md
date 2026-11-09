@@ -13,7 +13,8 @@ story points **up or down**. Powered by [Bigdata.com](https://bigdata.com).
 | 2 | [`notebooks/02_commodities_trending.ipynb`](notebooks/02_commodities_trending.ipynb) | *Which gold, silver, copper, oil… stories are trending, and is the move up or down?* | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Bigdata-com/bigdata-trending-news/blob/main/notebooks/02_commodities_trending.ipynb) |
 
 Each notebook runs top to bottom in about 2 minutes ([run time](#run-time)) and ends with a **self-contained HTML report** (one file, no
-external assets, opens in any browser or can be emailed) plus CSV files in `outputs/`. Sample reports from a real
+external assets, opens in any browser or can be emailed) plus CSV files in `outputs/`. Both notebooks also
+write an Excel workbook with Trending, Breaking, and Audit sheets. Sample reports from a real
 run are in [`outputs/samples/`](outputs/samples/).
 
 ---
@@ -151,15 +152,15 @@ folder. Point any scheduler at it.
 outputs/
 ├── runs/
 │   ├── 2026-10-13_1900Z/                 one folder per run (UTC start time)
-│   │   ├── watchlist_trending_2026-10-13.html   + *_trending.csv, *_emerging.csv
-│   │   ├── commodities_trending_2026-10-13.html + CSVs
+│   │   ├── watchlist_trending_2026-10-13.html   + *_trending.csv, *_emerging.csv, .xlsx
+│   │   ├── commodities_trending_2026-10-13.html + CSVs + .xlsx
 │   │   ├── 01_watchlist_trending.ipynb   executed copy, with all outputs and ⏱ cell timings
 │   │   ├── 02_commodities_trending.ipynb
 │   │   └── run.log                       status and duration per notebook
 │   └── 2026-10-13_2000Z/ …
 └── latest/                               newest reports under fixed names: bookmark these
-    ├── watchlist_trending.html
-    └── commodities_trending.html  (+ CSVs)
+    ├── watchlist_trending.html          (+ CSVs and watchlist_trending.xlsx)
+    └── commodities_trending.html        (+ CSVs and commodities_trending.xlsx)
 ```
 
 The notebooks in `notebooks/` are never modified by the runner.

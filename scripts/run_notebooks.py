@@ -110,7 +110,7 @@ def main() -> int:
         if any(results.values()):
             LATEST_DIR.mkdir(parents=True, exist_ok=True)
             for f in out_dir.iterdir():
-                if f.suffix in {".html", ".csv"}:  # stable names, e.g. watchlist_trending.html
+                if f.suffix in {".html", ".csv", ".xlsx"}:  # stable names, e.g. watchlist_trending.html
                     shutil.copy(f, LATEST_DIR / re.sub(r"_\d{4}-\d{2}-\d{2}", "", f.name))
         prune(args.keep_days)
         return 0 if all(results.values()) else 1
