@@ -158,12 +158,24 @@ def text_sparkline(values: list[int]) -> str:
     return "".join(_BARS[int((v - lo) / span * (len(_BARS) - 1))] for v in values)
 
 
+_MOMENTUM_COLUMNS: tuple[str, ...] = (
+    "entity",
+    "name",
+    "spike",
+    "current_docs",
+    "baseline_per_period",
+    "distinct_sources",
+    "sentiment",
+    "trend",
+    "mode",
+)
+
+
 def momentum_table(mom: dict[str, Momentum], entities: list[Entity] | None = None) -> pd.DataFrame:
     """Entities sorted by spike: which names are unusually loud right now."""
     names = {e.key: e.name for e in entities or []}
-    rows = []
-    for m in mom.values():
-        rows.append({
+    rows = [
+        {
             "entity": m.key,
             "name": names.get(m.key, ""),
             "spike": m.spike,
@@ -173,6 +185,10 @@ def momentum_table(mom: dict[str, Momentum], entities: list[Entity] | None = Non
             "sentiment": m.sentiment,
             "trend": text_sparkline(m.sparkline),
             "mode": m.mode,
-        })
-    df = pd.DataFrame(rows)
-    return df.sort_values("spike", ascending=False).reset_index(drop=True) if len(df) else df
+        }
+        for m in mom.values()
+    ]
+    df = pd.DataFrame(rows, columns=list(_MOMENTUM_COLUMNS))
+    if df.empty:
+        return df
+    return df.sort_values("spike", ascending=False).reset_index(drop=True)
